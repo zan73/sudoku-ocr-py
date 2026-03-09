@@ -1,0 +1,657 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sudoku Worker Tester</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            max-width: 800px;
+            margin: 40px auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+        }
+
+        h1 {
+            color: #333;
+            margin-bottom: 10px;
+        }
+
+        .info {
+            background: #e3f2fd;
+            padding: 12px;
+            border-radius: 4px;
+            margin-bottom: 20px;
+            font-size: 14px;
+        }
+
+        .input-group {
+            margin-bottom: 20px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+            color: #555;
+        }
+
+        input[type="text"],
+        input[type="file"] {
+            width: 100%;
+            padding: 10px;
+            border: 2px solid #ddd;
+            border-radius: 4px;
+            font-size: 14px;
+            box-sizing: border-box;
+        }
+
+        input[type="text"]:focus,
+        input[type="file"]:focus {
+            outline: none;
+            border-color: #2196F3;
+        }
+
+        button {
+            background: #2196F3;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 4px;
+            font-size: 16px;
+            cursor: pointer;
+            margin-right: 10px;
+        }
+
+        button:hover {
+            background: #1976D2;
+        }
+
+        button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+
+        .secondary {
+            background: #757575;
+        }
+
+        .secondary:hover {
+            background: #616161;
+        }
+
+        #result {
+            margin-top: 20px;
+            padding: 15px;
+            border-radius: 4px;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+            font-family: monospace;
+            font-size: 12px;
+            display: none;
+        }
+
+        .success {
+            background: #e8f5e9;
+            border: 1px solid #4caf50;
+        }
+
+        .error {
+            background: #ffebee;
+            border: 1px solid #f44336;
+        }
+
+        .grid-display {
+            display: grid;
+            grid-template-columns: repeat(9, 1fr);
+            gap: 2px;
+            max-width: 360px;
+            margin: 15px auto;
+            background: #333;
+            padding: 2px;
+        }
+
+        .grid-cell {
+            background: white;
+            aspect-ratio: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 18px;
+            font-weight: 600;
+        }
+
+        .grid-cell.empty {
+            color: #ccc;
+        }
+
+        .grid-cell:nth-child(3n) {
+            border-right: 2px solid #333;
+        }
+
+        .grid-cell:nth-child(n+19):nth-child(-n+27),
+        .grid-cell:nth-child(n+46):nth-child(-n+54) {
+            border-bottom: 2px solid #333;
+        }
+
+        .loading {
+            display: inline-block;
+            margin-left: 10px;
+        }
+
+        canvas {
+            max-width: 100%;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            margin-top: 10px;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <h1>🔢 Sudoku Worker Tester</h1>
+
+        <div class="info">
+            <strong>Testing Options:</strong><br>
+            1. Upload a Sudoku image from your device<br>
+            2. Generate a test Sudoku grid image<br>
+            3. Send to sudoku-ocr.skuza.net for AI OCR
+        </div>
+
+        <div class="input-group">
+            <label>Worker Endpoint URL:</label>
+            <input type="text" id="workerUrl" value="">
+        </div>
+
+        <div class="input-group">
+            <label>Option 1: Upload Image File</label>
+            <input type="file" id="imageFile" accept="image/*" onchange="previewImage(this)">
+        </div>
+
+        <div id="previewContainer" style="display:none; margin-bottom: 20px;">
+            <label>Image Preview:</label>
+            <img id="imagePreview" style="max-width: 100%; border: 1px solid #ddd; border-radius: 4px;">
+        </div>
+
+        <div class="input-group">
+            <label>Option 2: Generate Test Image</label>
+            <button onclick="generateTestGrid()">Generate Random Sudoku Grid</button>
+            <canvas id="testCanvas" style="display:none;"></canvas>
+        </div>
+
+        <div style="margin-top: 20px; display: flex; align-items: center; gap: 15px;">
+            <button onclick="testWorker()">Test Worker</button>
+            <button class="secondary" onclick="clearResult()">Clear</button>
+            <label style="display: flex; align-items: center; cursor: pointer; margin-bottom: 0;">
+                <input type="checkbox" id="debugMode" style="width: auto; margin-right: 8px;"> Debug Mode
+            </label>
+            <span id="loading" class="loading" style="display:none;">⏳ Processing...</span>
+        </div>
+
+        <div id="debugContainer" style="display:none; margin-top: 20px; border-top: 1px solid #eee; padding-top: 20px;">
+            <h3>🔍 Intermediate Steps</h3>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+                <div>
+                    <label>1. Thresholded Image:</label>
+                    <img id="threshPreview"
+                        style="max-width: 100%; border: 1px solid #ddd; border-radius: 4px; background: #eee;">
+                </div>
+                <div>
+                    <label>2. Warped Grid:</label>
+                    <img id="warpedPreview"
+                        style="max-width: 100%; border: 1px solid #ddd; border-radius: 4px; background: #eee;">
+                </div>
+            </div>
+            <div id="rawOcrResult"
+                style="margin-top: 15px; font-size: 11px; font-family: monospace; background: #f8f8f8; padding: 10px; border-radius: 4px; white-space: pre-wrap; display: none;">
+            </div>
+        </div>
+
+        <div id="result"></div>
+    </div>
+
+    <script>
+        let generatedImageBase64 = null;
+
+        // Auto-fill worker URL from current location
+        window.onload = function () {
+            const workerInput = document.getElementById('workerUrl');
+            if (!workerInput.value) {
+                workerInput.value = window.location.origin;
+            }
+        };
+
+        function previewImage(input) {
+            const container = document.getElementById('previewContainer');
+            const preview = document.getElementById('imagePreview');
+            const canvas = document.getElementById('testCanvas');
+
+            if (input.files && input.files[0]) {
+                const reader = new FileReader();
+                reader.onload = function (e) {
+                    preview.src = e.target.result;
+                    container.style.display = 'block';
+                    // Clear generated canvas if we're uploading a file
+                    canvas.style.display = 'none';
+                    generatedImageBase64 = null;
+                }
+                reader.readAsDataURL(input.files[0]);
+            } else {
+                container.style.display = 'none';
+            }
+        }
+
+        function generateTestGrid() {
+            const previewContainer = document.getElementById('previewContainer');
+            const fileInput = document.getElementById('imageFile');
+
+            // Clear file input and preview if we're generating a grid
+            fileInput.value = '';
+            previewContainer.style.display = 'none';
+
+            const canvas = document.getElementById('testCanvas');
+            const ctx = canvas.getContext('2d');
+
+            // Set canvas size
+            canvas.width = 450;
+            canvas.height = 450;
+            canvas.style.display = 'block';
+
+            // Generate a random Sudoku puzzle
+            const puzzle = generateRandomSudoku();
+
+            // White background
+            ctx.fillStyle = 'white';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            const cellSize = 50;
+
+            // Draw grid lines
+            ctx.strokeStyle = '#000';
+            ctx.lineWidth = 1;
+
+            for (let i = 0; i <= 9; i++) {
+                ctx.lineWidth = (i % 3 === 0) ? 3 : 1;
+
+                // Vertical lines
+                ctx.beginPath();
+                ctx.moveTo(i * cellSize, 0);
+                ctx.lineTo(i * cellSize, 450);
+                ctx.stroke();
+
+                // Horizontal lines
+                ctx.beginPath();
+                ctx.moveTo(0, i * cellSize);
+                ctx.lineTo(450, i * cellSize);
+                ctx.stroke();
+            }
+
+            // Draw numbers
+            ctx.fillStyle = '#000';
+            ctx.font = 'bold 24px Arial';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+
+            for (let i = 0; i < 81; i++) {
+                if (puzzle[i] !== 0) {
+                    const row = Math.floor(i / 9);
+                    const col = i % 9;
+                    const x = col * cellSize + cellSize / 2;
+                    const y = row * cellSize + cellSize / 2;
+                    ctx.fillText(puzzle[i].toString(), x, y);
+                }
+            }
+
+            // Convert canvas to base64
+            generatedImageBase64 = canvas.toDataURL('image/png');
+            console.log('Generated puzzle with', puzzle.filter(n => n !== 0).length, 'clues');
+        }
+
+        // Helper function to generate random Sudoku puzzle
+        function generateRandomSudoku() {
+            // Create empty grid
+            const grid = Array(81).fill(0);
+
+            // Fill diagonal 3x3 boxes first (they're independent)
+            fillDiagonalBoxes(grid);
+
+            // Solve the rest
+            solveSudokuArray(grid, 0);
+
+            // Remove numbers to create puzzle (keep 25-35 clues for reasonable difficulty)
+            const cluesCount = 25 + Math.floor(Math.random() * 11); // 25-35 clues
+            removeNumbers(grid, 81 - cluesCount);
+
+            return grid;
+        }
+
+        function fillDiagonalBoxes(grid) {
+            for (let box = 0; box < 9; box += 3) {
+                const nums = [1, 2, 3, 4, 5, 6, 7, 8, 9];
+                // Shuffle numbers
+                for (let i = nums.length - 1; i > 0; i--) {
+                    const j = Math.floor(Math.random() * (i + 1));
+                    [nums[i], nums[j]] = [nums[j], nums[i]];
+                }
+
+                let idx = 0;
+                for (let row = box; row < box + 3; row++) {
+                    for (let col = box; col < box + 3; col++) {
+                        grid[row * 9 + col] = nums[idx++];
+                    }
+                }
+            }
+        }
+
+        function solveSudokuArray(grid, pos) {
+            if (pos === 81) return true;
+
+            if (grid[pos] !== 0) {
+                return solveSudokuArray(grid, pos + 1);
+            }
+
+            const row = Math.floor(pos / 9);
+            const col = pos % 9;
+
+            const nums = [1, 2, 3, 4, 5, 6, 7, 8, 9];
+            // Shuffle for randomness
+            for (let i = nums.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [nums[i], nums[j]] = [nums[j], nums[i]];
+            }
+
+            for (const num of nums) {
+                if (isValidPlacement(grid, row, col, num)) {
+                    grid[pos] = num;
+                    if (solveSudokuArray(grid, pos + 1)) return true;
+                    grid[pos] = 0;
+                }
+            }
+
+            return false;
+        }
+
+        function isValidPlacement(grid, row, col, num) {
+            // Check row
+            for (let c = 0; c < 9; c++) {
+                if (grid[row * 9 + c] === num) return false;
+            }
+
+            // Check column
+            for (let r = 0; r < 9; r++) {
+                if (grid[r * 9 + col] === num) return false;
+            }
+
+            // Check 3x3 box
+            const boxRow = Math.floor(row / 3) * 3;
+            const boxCol = Math.floor(col / 3) * 3;
+            for (let r = boxRow; r < boxRow + 3; r++) {
+                for (let c = boxCol; c < boxCol + 3; c++) {
+                    if (grid[r * 9 + c] === num) return false;
+                }
+            }
+
+            return true;
+        }
+
+        function removeNumbers(grid, count) {
+            let removed = 0;
+            const attempts = new Set();
+
+            while (removed < count && attempts.size < 81) {
+                const pos = Math.floor(Math.random() * 81);
+
+                if (attempts.has(pos)) continue;
+                attempts.add(pos);
+
+                if (grid[pos] !== 0) {
+                    grid[pos] = 0;
+                    removed++;
+                }
+            }
+        }
+
+        async function testWorker() {
+            let workerUrl = document.getElementById('workerUrl').value.trim();
+            const fileInput = document.getElementById('imageFile');
+            const resultDiv = document.getElementById('result');
+            const loading = document.getElementById('loading');
+            const debugMode = document.getElementById('debugMode').checked;
+            const debugContainer = document.getElementById('debugContainer');
+
+            if (!workerUrl) {
+                showResult('Please enter a worker URL', false);
+                return;
+            }
+
+            // Ensure URL ends with the correct endpoint
+            const endpoint = debugMode ? '/debug/process' : '/process-sudoku';
+            if (!workerUrl.includes('/process-sudoku') && !workerUrl.includes('/debug/process')) {
+                workerUrl = workerUrl.replace(/\/$/, '') + endpoint;
+            } else if (workerUrl.includes('/process-sudoku') && debugMode) {
+                workerUrl = workerUrl.replace('/process-sudoku', '/debug/process');
+            } else if (workerUrl.includes('/debug/process') && !debugMode) {
+                workerUrl = workerUrl.replace('/debug/process', '/process-sudoku');
+            }
+
+            loading.style.display = 'inline';
+            resultDiv.style.display = 'none';
+            debugContainer.style.display = 'none';
+
+            try {
+                const formData = new FormData();
+
+                // Check if file was uploaded
+                if (fileInput.files && fileInput.files[0]) {
+                    const file = fileInput.files[0];
+                    const maxSizeBytes = 20 * 1024 * 1024; // 20MB limit
+
+                    if (file.size > maxSizeBytes) {
+                        showResult(`File too large (${(file.size / 1024 / 1024).toFixed(2)}MB). Max 20MB.`, false);
+                        loading.style.display = 'none';
+                        return;
+                    }
+                    formData.append('file', file);
+                } else if (generatedImageBase64) {
+                    // Convert base64 to Blob
+                    const resp = await fetch(generatedImageBase64);
+                    const blob = await resp.blob();
+                    formData.append('file', blob, 'test_grid.png');
+                } else {
+                    showResult('Please upload an image or generate a test grid first', false);
+                    loading.style.display = 'none';
+                    return;
+                }
+
+                console.log('Sending image to worker:', workerUrl);
+
+                const response = await fetch(workerUrl, {
+                    method: 'POST',
+                    body: formData
+                });
+
+                const data = await response.json();
+                console.log('Worker response:', data);
+
+                if (response.ok && data.success) {
+                    if (debugMode) {
+                        displayDebugResult(data);
+                    } else {
+                        displaySuccessResult(data);
+                    }
+                } else {
+                    let errorMsg = 'Processing failed.\n';
+                    if (data.detail) errorMsg += `Detail: ${JSON.stringify(data.detail)}\n`;
+                    if (data.error) errorMsg += `Error: ${data.error}\n`;
+                    if (!data.detail && !data.error) errorMsg += JSON.stringify(data, null, 2);
+                    showResult(errorMsg, false);
+                }
+            } catch (error) {
+                console.error('Test error:', error);
+                showResult(`Network Error: ${error.message}\nMake sure the backend is running and CORS is enabled.`, false);
+            } finally {
+                loading.style.display = 'none';
+            }
+        }
+
+        function displayDebugResult(data) {
+            const debugContainer = document.getElementById('debugContainer');
+            const threshPreview = document.getElementById('threshPreview');
+            const warpedPreview = document.getElementById('warpedPreview');
+            const rawOcrResult = document.getElementById('rawOcrResult');
+
+            debugContainer.style.display = 'block';
+
+            if (data.thresh_image) {
+                threshPreview.src = 'data:image/png;base64,' + data.thresh_image;
+            } else {
+                threshPreview.src = '';
+            }
+
+            if (data.warped_image) {
+                warpedPreview.src = 'data:image/png;base64,' + data.warped_image;
+            } else {
+                warpedPreview.src = '';
+            }
+
+            if (data.raw_ocr_result) {
+                rawOcrResult.textContent = 'Raw OCR Data:\n' + data.raw_ocr_result;
+                rawOcrResult.style.display = 'block';
+            } else {
+                rawOcrResult.style.display = 'none';
+            }
+
+            showResult('Debug info received. Check intermediate steps above.', true);
+        }
+
+        async function compressImage(file, maxSizeBytes) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+
+                reader.onload = (e) => {
+                    const img = new Image();
+
+                    img.onload = () => {
+                        // Start with original dimensions
+                        let width = img.width;
+                        let height = img.height;
+                        let quality = 0.9;
+
+                        // Calculate scale factor to reduce file size
+                        // Estimate: assume 4 bytes per pixel in memory, then JPEG compression
+                        const currentEstimatedSize = width * height * 4;
+                        const targetSize = maxSizeBytes * 0.8; // Target 80% of max to leave room
+
+                        if (currentEstimatedSize > targetSize) {
+                            const scale = Math.sqrt(targetSize / currentEstimatedSize);
+                            width = Math.floor(width * scale);
+                            height = Math.floor(height * scale);
+                            console.log(`Resizing to ${width}x${height}`);
+                        }
+
+                        // Create canvas and draw resized image
+                        const canvas = document.createElement('canvas');
+                        canvas.width = width;
+                        canvas.height = height;
+
+                        const ctx = canvas.getContext('2d');
+                        ctx.drawImage(img, 0, 0, width, height);
+
+                        // Try to get under size limit by reducing quality
+                        const tryCompress = (q) => {
+                            const dataUrl = canvas.toDataURL('image/jpeg', q);
+                            const sizeBytes = Math.round((dataUrl.length - 'data:image/jpeg;base64,'.length) * 0.75);
+
+                            console.log(`Quality ${q}: ${(sizeBytes / 1024 / 1024).toFixed(2)}MB`);
+
+                            if (sizeBytes <= maxSizeBytes || q <= 0.3) {
+                                console.log(`Final compressed size: ${(sizeBytes / 1024 / 1024).toFixed(2)}MB`);
+                                resolve(dataUrl);
+                            } else {
+                                // Reduce quality and try again
+                                tryCompress(q - 0.1);
+                            }
+                        };
+
+                        tryCompress(quality);
+                    };
+
+                    img.onerror = () => reject(new Error('Failed to load image'));
+                    img.src = e.target.result;
+                };
+
+                reader.onerror = () => reject(new Error('Failed to read file'));
+                reader.readAsDataURL(file);
+            });
+        }
+
+        function displaySuccessResult(data) {
+            const resultDiv = document.getElementById('result');
+            resultDiv.className = 'success';
+            resultDiv.style.display = 'block';
+
+            let html = '<strong>✅ Success!</strong>\n\n';
+
+            if (data.extraction_method) {
+                html += `<strong>Extraction Method:</strong> ${data.extraction_method}\n\n`;
+            }
+
+            html += '<div class="grid-display">';
+
+            const grid = data.grid || (data.grid_string ? data.grid_string.split('') : []);
+            for (let i = 0; i < 81; i++) {
+                const val = grid[i] || '0';
+                const isEmpty = val === '0' || val === '.';
+                html += `<div class="grid-cell ${isEmpty ? 'empty' : ''}">${isEmpty ? '·' : val}</div>`;
+            }
+
+            html += '</div>\n';
+            html += `<strong>Grid String:</strong>\n${data.grid_string}\n\n`;
+
+            if (data.statistics) {
+                html += `<strong>Statistics:</strong>\n`;
+                html += `- Filled cells: ${data.statistics.filled_cells}\n`;
+                html += `- Empty cells: ${data.statistics.empty_cells}\n`;
+                html += `- Image size: ${data.statistics.image_size_kb} KB\n\n`;
+            }
+
+            html += `<strong>Raw AI Response:</strong>\n${data.raw_response}`;
+
+            resultDiv.innerHTML = html;
+
+            // Also log to console
+            console.log('%c✅ OCR Success', 'color: #059669; font-weight: bold; font-size: 16px');
+            console.log('Grid:', data.grid_string);
+            if (data.statistics) {
+                console.table(data.statistics);
+            }
+        }
+
+        function showResult(message, success = true) {
+            const resultDiv = document.getElementById('result');
+            resultDiv.textContent = message;
+            resultDiv.className = success ? 'success' : 'error';
+            resultDiv.style.display = 'block';
+        }
+
+        function clearResult() {
+            document.getElementById('result').style.display = 'none';
+            document.getElementById('debugContainer').style.display = 'none';
+            document.getElementById('imageFile').value = '';
+            document.getElementById('testCanvas').style.display = 'none';
+            generatedImageBase64 = null;
+        }
+    </script>
+</body>
+
+</html>
