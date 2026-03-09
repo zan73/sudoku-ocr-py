@@ -10,7 +10,66 @@ import logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+from fastapi.responses import FileResponse
+from pydantic import BaseModel
+import aiosmtplib
+from email.message import EmailMessage
+import os
+
 app = FastAPI()
+
+class EmailRequest(BaseModel):
+    subject: str
+    message: str
+
+@app.post("/send-message")
+async def send_message(request: EmailRequest):
+    """
+    Sends an email using SMTP configuration from environment variables.
+    """
+    smtp_host = os.getenv("SMTP_HOST")
+    smtp_port = int(os.getenv("SMTP_PORT", 587))
+    smtp_user = os.getenv("SMTP_USER")
+    smtp_password = os.getenv("SMTP_PASSWORD")
+    dest_email = os.getenv("DESTINATION_EMAIL")
+    
+    # Optional flags for manual override
+    use_tls_env = os.getenv("SMTP_USE_TLS", "").lower() == "true"
+    start_tls_env = os.getenv("SMTP_STARTTLS", "").lower() == "true"
+    
+    # Auto-detect defaults if not explicitly set
+    use_tls = use_tls_env or (smtp_port == 465)
+    start_tls = start_tls_env or (smtp_port == 587)
+
+    if not all([smtp_host, smtp_user, smtp_password, dest_email]):
+        raise HTTPException(
+            status_code=500, 
+            detail="Email service not configured. Check environment variables."
+        )
+
+    msg = EmailMessage()
+    msg["From"] = smtp_user
+    msg["To"] = dest_email
+    msg["Subject"] = request.subject
+    msg.set_content(request.message)
+
+    try:
+        logger.info(f"Attempting to send email to {dest_email} via {smtp_host}:{smtp_port} (TLS: {use_tls}, STARTTLS: {start_tls})")
+        await aiosmtplib.send(
+            msg,
+            hostname=smtp_host,
+            port=smtp_port,
+            username=smtp_user,
+            password=smtp_password,
+            use_tls=use_tls,
+            start_tls=start_tls,
+            timeout=10
+        )
+        return {"success": True, "message": "Email sent successfully"}
+    except Exception as e:
+        error_msg = f"Failed to send email: {str(e)}"
+        logger.error(error_msg)
+        raise HTTPException(status_code=500, detail=error_msg)
 
 # Enable CORS for local testing and web access
 app.add_middleware(

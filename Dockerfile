@@ -24,6 +24,12 @@ COPY index.html .
 # Disable Paddle PIR mode which is buggy in some versions
 ENV FLAGS_enable_pir_api=0
 
+# SMTP Configuration (Non-sensitive defaults only)
+ENV SMTP_HOST="smtp.gmail.com"
+ENV SMTP_PORT=587
+ENV SMTP_USE_TLS="false"
+ENV SMTP_STARTTLS="true"
+
 # Expose the port for the FastAPI server
 EXPOSE 8000
 

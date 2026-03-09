@@ -18,8 +18,15 @@ A robust, Dockerized Sudoku OCR application powered by **FastAPI**, **OpenCV**, 
    ```
 
 2. **Run the container**:
+   Pass your email configuration as environment variables at runtime (do NOT bake these into the image):
    ```bash
-   docker run -p 8000:8000 sudoku-ocr
+   docker run -p 8000:8000 \
+     -e SMTP_HOST="smtp.gmail.com" \
+     -e SMTP_PORT=587 \
+     -e SMTP_USER="your-email@gmail.com" \
+     -e SMTP_PASSWORD="your-app-password" \
+     -e DESTINATION_EMAIL="recipient@example.com" \
+     sudoku-ocr
    ```
 
 3. **Access the UI**:
